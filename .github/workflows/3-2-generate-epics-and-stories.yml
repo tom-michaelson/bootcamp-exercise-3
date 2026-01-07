@@ -60,8 +60,6 @@ jobs:
           required_headers=(
             "Epic"
             "Story"
-            "MVP"
-            "Post-MVP"
             "Acceptance Criteria"
             "Technical Requirements"
           )
