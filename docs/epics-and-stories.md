@@ -1,0 +1,119 @@
+- Epic: Task Data Model
+  - Story: Add priority field (P1–P3, default P3)
+    - Acceptance Criteria:
+      - User can set priority to P1, P2, or P3.
+      - Priority defaults to P3 when not specified.
+    - Technical Requirements:
+      - Frontend: Add a priority selector (MUI Select) in packages/frontend/src/TaskForm.js and include `priority` in the payload sent via `onSave()`.
+      - Frontend: Update packages/frontend/src/App.js `handleSave()` to pass `priority` through POST/PUT or local storage layer.
+      - Frontend: Display priority badge in packages/frontend/src/TaskList.js.
+      - Storage: If continuing to use backend, add `priority` column to tasks table and support in all endpoints; if switching to local storage per PRD, introduce a storage service module and remove fetch calls.
+  - Story: Add due date field (YYYY-MM-DD)
+    - Acceptance Criteria:
+      - User can optionally set a due date in ISO format YYYY-MM-DD.
+      - Tasks may omit due date without error.
+    - Technical Requirements:
+      - Frontend: Ensure packages/frontend/src/TaskForm.js uses `<TextField type="date">` producing YYYY-MM-DD and includes `due_date` in save payload.
+      - Frontend: Normalize incoming dates from `initialTask` to YYYY-MM-DD; reject or clear unparsable values.
+      - Backend (if used): Field `due_date DATE` already exists; keep payload snake_case (`due_date`).
+- Epic: Due Date Validation
+  - Story: Ignore invalid due dates on save
+    - Acceptance Criteria:
+      - Invalid or unparsable due dates are not saved.
+      - Tasks with invalid due dates behave as if no due date is set.
+      - App does not crash or block task creation/editing when invalid dates are entered.
+    - Technical Requirements:
+      - Frontend: In packages/frontend/src/TaskForm.js `handleSubmit()`, validate `due_date` with regex `^\d{4}-\d{2}-\d{2}$` and a real date check; if invalid, set `due_date = null` before calling `onSave()`.
+      - Frontend: In packages/frontend/src/TaskList.js `formatDueDate()`, guard against invalid/empty strings and return `null` without throwing.
+      - Backend (if used): Accept `null` for `due_date`; no server-side rejection when absent.
+- Epic: Filter Views
+  - Story: Add All tab
+    - Acceptance Criteria:
+      - All tab is available and selectable.
+      - Displays all tasks, including completed and incomplete.
+    - Technical Requirements:
+      - Frontend: Add MUI `Tabs` and `Tab` components in packages/frontend/src/App.js or packages/frontend/src/TaskList.js; manage selected tab via React state.
+      - Frontend: Compute `visibleTasks` client-side; All returns the full list without completion filtering.
+  - Story: Add Today tab (incomplete tasks)
+    - Acceptance Criteria:
+      - Today tab is available and selectable.
+      - Shows only tasks due on the current calendar day.
+      - Excludes completed tasks.
+    - Technical Requirements:
+      - Frontend: In TaskList, filter tasks where `due_date === today` and `completed === false` using local date computations.
+      - Backend (optional): No direct server filter; do client-side filtering to remain compatible with local storage mode.
+  - Story: Add Overdue tab (incomplete tasks)
+    - Acceptance Criteria:
+      - Overdue tab is available and selectable.
+      - Shows only tasks with due dates earlier than the current day.
+      - Excludes completed tasks.
+    - Technical Requirements:
+      - Frontend: In TaskList, filter tasks where `due_date < today` and `completed === false` using local date comparisons (YYYY-MM-DD strings).
+      - Ensure timezone-safe comparison by comparing date components, not Date objects with timezones.
+- Epic: Filter Behavior
+  - Story: Include completed tasks in All view
+    - Acceptance Criteria:
+      - Completed tasks appear in the All tab alongside incomplete tasks.
+    - Technical Requirements:
+      - Frontend: All tab’s filter function must not exclude `completed === true` tasks.
+  - Story: Exclude completed tasks from Today and Overdue
+    - Acceptance Criteria:
+      - Completed tasks do not appear in Today or Overdue tabs.
+    - Technical Requirements:
+      - Frontend: Ensure Today/Overdue filters include `!task.completed` in their predicates.
+- Epic: Local Storage
+  - Story: Persist tasks to local storage
+    - Acceptance Criteria:
+      - Newly created and edited tasks are saved to localStorage.
+      - Saved structure includes title, priority, optional dueDate, and completion status.
+    - Technical Requirements:
+      - Frontend: Create `packages/frontend/src/services/storage.js` with CRUD functions (`list()`, `create()`, `update()`, `toggleComplete()`, `remove()`) using key `todo.tasks`.
+      - Frontend: Replace `fetch('/api/tasks...')` calls in packages/frontend/src/App.js and packages/frontend/src/TaskList.js with the storage service.
+      - Frontend: Store shape `{ id, title, description, priority, due_date, completed, created_at }`; maintain `id` via an incrementing counter in localStorage.
+  - Story: Load tasks from local storage on startup
+    - Acceptance Criteria:
+      - Tasks are restored from localStorage when the app loads.
+      - Filters operate on restored tasks without additional user action.
+    - Technical Requirements:
+      - Frontend: On mount in TaskList (or App), call `storage.list()` to populate state.
+      - Frontend: Ensure state updates trigger re-render and tabs filter based on current tasks.
+
+- Epic: Overdue Highlighting
+  - Story: Add visual highlight for overdue tasks
+    - Acceptance Criteria:
+      - Incomplete tasks with due dates before today are visually emphasized (e.g., red highlight or badge).
+      - Highlight is removed when a task is marked complete or its due date is updated to today/future.
+    - Technical Requirements:
+      - Frontend: In packages/frontend/src/TaskList.js, compute `isOverdue` per task and apply MUI styles (e.g., red border/background) or a red `Chip` adjacent to the due date.
+      - Frontend: Ensure highlight re-evaluates on completion toggle and on edit.
+- Epic: Priority Badges
+  - Story: Implement color-coded priority badges (P1 red, P2 orange, P3 gray)
+    - Acceptance Criteria:
+      - P1 displays with a red badge, P2 with orange, P3 with gray.
+      - Badge appears consistently wherever tasks are listed.
+    - Technical Requirements:
+      - Frontend: In packages/frontend/src/TaskList.js, render a MUI `Chip` for `priority` using colors: P1 `#f44336`, P2 `#ff9800`, P3 `#9e9e9e`.
+      - Frontend: Add `priority` selector in packages/frontend/src/TaskForm.js and persist via storage or backend.
+- Epic: Advanced Sorting
+  - Story: Sort overdue tasks first
+    - Acceptance Criteria:
+      - Overdue tasks appear before non-overdue tasks in views where sorting applies.
+    - Technical Requirements:
+      - Frontend: Implement a stable sort in packages/frontend/src/TaskList.js that computes `overdue` boolean and sorts `true` before `false`.
+      - Backend (if used): Adjust SQL `ORDER BY` to prioritize overdue (computed via `due_date < today`) only if server-side sorting remains; otherwise rely on client-side.
+  - Story: Sort by priority P1→P3
+    - Acceptance Criteria:
+      - Within the same overdue/non-overdue grouping, tasks are ordered by priority P1, then P2, then P3.
+    - Technical Requirements:
+      - Frontend: Map priority to numeric weight (P1=1, P2=2, P3=3) and sort ascending within groupings.
+  - Story: Sort by due date ascending
+    - Acceptance Criteria:
+      - When priority is equal, tasks with earlier due dates appear before later ones.
+    - Technical Requirements:
+      - Frontend: Compare YYYY-MM-DD strings lexicographically (safe for ISO) to order ascending.
+  - Story: Place tasks without due date last
+    - Acceptance Criteria:
+      - Tasks lacking a due date are ordered after tasks with due dates.
+    - Technical Requirements:
+      - Frontend: In sort comparator, treat `due_date === null/''` as max value; ensure consistent across tabs.
+      - Backend (current): Existing SQL `ORDER BY due_date IS NULL, due_date ASC, created_at ASC` already places nulls last; update to include priority if backend sorting is retained.
